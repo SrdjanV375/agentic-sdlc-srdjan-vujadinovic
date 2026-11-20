@@ -1,0 +1,25 @@
+@startuml runtime-book-success
+skinparam backgroundColor white
+
+actor "Hotel User" as user
+participant "Web Interface" as web
+participant "Command Service" as command
+participant "WriteRegistry" as write
+participant "ReadRegistry" as read
+
+user -> web : Submit booking\n(client, room, arrival, departure)
+web -> command : Book room request
+command -> write : Begin serialized write transaction
+activate write
+write -> write : Check authoritative reservations\n(room, arrival, departure)
+write --> command : No conflicts
+command -> write : Insert reservation
+write -> read : Update ReadRegistry\n(same database transaction)
+read --> write : Updated
+write -> write : COMMIT
+write --> command : Reservation committed
+deactivate write
+command --> web : Booking confirmed
+web --> user : Renders confirmation page
+
+@enduml

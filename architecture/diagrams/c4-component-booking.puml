@@ -1,0 +1,16 @@
+@startuml c4-component-booking
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+skinparam backgroundColor white
+Container_Boundary(app, "Web Application") {
+Component(web, "Web Interface", "Flask", "Renders HTML forms and pages")
+Component(command, "Command Service", "Python", "Processes booking commands")
+Component(write, "WriteRegistry", "Python", "Stores authoritative reservations")
+Component(read, "ReadRegistry", "Python", "Maintains the availability read projection")
+Component(query, "Query Service", "Python", "Finds available rooms")
+}
+Rel(web, command, "Submits bookings")
+Rel(command, write, "Checks overlaps and writes reservations")
+Rel(write, read, "Notifies synchronously within the booking transaction")
+Rel(web, query, "Requests available rooms")
+Rel(query, read, "Reads availability")
+@enduml
