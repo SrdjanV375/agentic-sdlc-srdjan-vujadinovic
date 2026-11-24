@@ -1,0 +1,20 @@
+@startuml runtime-book-reject
+skinparam backgroundColor white
+
+actor "Hotel User" as user
+participant "Web Interface" as web
+participant "Command Service" as command
+participant "WriteRegistry" as write
+
+user -> web : Submit booking\n(client, room, arrival, departure)
+web -> command : Book room request
+command -> write : Begin serialized write transaction
+activate write
+write -> write : Check authoritative reservations\n(room, arrival, departure)
+write --> command : Conflict found
+command -> write : ROLLBACK
+deactivate write
+command --> web : Booking rejected
+web --> user : Renders error page
+
+@enduml

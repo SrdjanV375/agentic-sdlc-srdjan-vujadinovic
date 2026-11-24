@@ -1,0 +1,11 @@
+@startuml c4-container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+skinparam backgroundColor white
+Person(user, "Hotel User")
+System_Boundary(system, "CQRS Booking") {
+Container(app, "Web Application", "Python / Flask", "Handles searches and reservations")
+ContainerDb(db, "Booking Database", "SQLite", "Embedded database file for rooms, reservations and read projection")
+}
+Rel(user, app, "Uses", "HTTP")
+Rel(app, db, "Reads and writes", "SQL")
+@enduml

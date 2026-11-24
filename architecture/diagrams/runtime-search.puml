@@ -1,0 +1,16 @@
+@startuml runtime-search
+skinparam backgroundColor white
+
+actor "Hotel User" as user
+participant "Web Interface" as web
+participant "Query Service" as query
+participant "ReadRegistry" as read
+
+user -> web : Requests availability
+web -> query : Find available rooms\n(arrival, departure)
+query -> read : Read availability\n(arrival, departure)
+read --> query : Available rooms list
+query --> web : Available rooms list
+web --> user : Renders availability page
+
+@enduml

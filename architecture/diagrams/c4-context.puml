@@ -1,0 +1,12 @@
+@startuml c4-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+skinparam backgroundColor white
+title CQRS Booking - System Context
+
+Person(user, "Hotel User", "Searches for available rooms and books a room")
+System(booking, "CQRS Booking", "Manages room availability and reservations for one hotel")
+
+Rel(user, booking, "Searches by dates and submits booking details")
+Rel(booking, user, "Displays available rooms and booking outcomes")
+
+@enduml

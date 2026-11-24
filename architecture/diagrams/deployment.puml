@@ -1,0 +1,19 @@
+@startuml deployment
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+skinparam backgroundColor white
+
+Deployment_Node(node, "Docker Host", "Docker Engine") {
+    Deployment_Node(container, "CQRS Booking Container", "Docker") {
+        Container(app, "CQRS Booking", "Python / Flask", "Web application serving HTTP")
+    }
+    Deployment_Node(volume, "Persistent Volume", "Docker") {
+        ContainerDb(db, "SQLite Database", "SQLite", "Embedded database file for rooms, reservations and read projection")
+    }
+}
+
+Person(user, "Hotel User")
+
+Rel(user, app, "HTTP")
+Rel(app, db, "Reads and writes")
+
+@enduml
