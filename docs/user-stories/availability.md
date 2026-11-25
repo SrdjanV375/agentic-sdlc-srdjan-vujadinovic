@@ -1,7 +1,7 @@
 # Availability — Manual Story Bundle
 
 This bundle is the manual exercise from Module 3, Part 1.
-Status: Draft for review. Implementation: Not started.
+Status: Approved for documentation. Implementation: Not started.
 
 ## AVAILABILITY-STORY-001 — Search available rooms
 
