@@ -52,4 +52,9 @@ class QueryService:
             raise ValidationError("arrival", "Arrival date is required.")
         if departure is None:
             raise ValidationError("departure", "Departure date is required.")
+        if arrival >= departure:
+            raise ValidationError(
+                "arrival",
+                "Arrival must be before departure.",
+            )
         return self.registry.find_available_rooms(arrival, departure)

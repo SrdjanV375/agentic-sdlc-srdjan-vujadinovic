@@ -87,3 +87,24 @@ def test_availability_be_001_1_s2_missing_departure_rejected_before_query():
         assert error.message
     finally:
         connection.close()
+
+
+def test_availability_be_001_1_s2_arrival_equal_departure_rejected():
+    """AVAILABILITY-BE-001.1-S2: Arrival equal to departure rejected before query."""
+    from cqrs_booking.availability import QueryService, ReadRegistry, ValidationError
+
+    connection = sqlite3.connect(":memory:")
+    try:
+        # GIVEN: The query operation is available.
+        registry = ReadRegistry(connection)
+        service = QueryService(registry)
+
+        # WHEN: Arrival and departure are the same date.
+        with pytest.raises(ValidationError) as exc_info:
+            service.find_available_rooms(date(2027, 6, 15), date(2027, 6, 15))
+
+        # THEN: Validation rejects with an informative message; no query executes.
+        error = exc_info.value
+        assert error.message
+    finally:
+        connection.close()
