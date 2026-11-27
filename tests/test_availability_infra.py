@@ -285,25 +285,40 @@ def test_availability_infra_001_2_s1_reuse_stored_data_after_container_replace()
 
 def test_availability_infra_001_3_s1_failed_search_logs_safely_no_internals():
     """AVAILABILITY-INFRA-001.3-S1: DB-read failure produces safe logs."""
+    import re
+
     from cqrs_booking.app import create_app
     from cqrs_booking.availability import QueryService, ReadRegistry
 
-    # GIVEN: Application logging is enabled; the data store will raise on read.
+    # GIVEN: Application logging is configured as it is at runtime, with the
+    #        format used by create_app_from_env; the data store will raise on read.
+    runtime_format = "%(asctime)s %(name)s %(levelname)s %(message)s"
+    # Timestamp pattern: YYYY-MM-DD HH:MM:SS,mmm
+    timestamp_re = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+")
+
     conn = sqlite3.connect(":memory:")
-    conn.close()  # closed connection → OperationalError on any execute
+    conn.close()  # closed connection → ProgrammingError on any execute
 
     registry = ReadRegistry(conn)
     service = QueryService(registry)
     app = create_app(query_service=service)
 
-    log_records = []
+    # Capture formatted output from the cqrs_booking logger hierarchy,
+    # using the same format string as create_app_from_env, without
+    # attaching a test-only formatter and claiming it proves runtime config.
+    formatted_lines = []
 
-    class _Capture(logging.Handler):
+    class _FormattedCapture(logging.Handler):
+        def __init__(self):
+            super().__init__()
+            self.setFormatter(logging.Formatter(runtime_format))
+
         def emit(self, record):
-            log_records.append(record)
+            formatted_lines.append(self.format(record))
 
-    handler = _Capture()
     logger = logging.getLogger("cqrs_booking")
+    original_level = logger.level
+    handler = _FormattedCapture()
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
 
@@ -316,27 +331,146 @@ def test_availability_infra_001_3_s1_failed_search_logs_safely_no_internals():
             query_string={"arrival": "2027-06-11", "departure": "2027-06-14"},
         )
 
-        # THEN: Generic feedback is returned; no database internals exposed.
+        # THEN: Generic user feedback is returned.
         assert response.status_code == 200
         body = response.data.decode()
         assert "Unable to complete" in body
+
+        # AND: No database internals are in the HTML response.
         assert "ProgrammingError" not in body
         assert "sqlite3" not in body
         assert "Cannot operate" not in body
 
-        # AND: At least one log record captures component + failure outcome.
-        assert log_records, "Expected at least one log record from cqrs_booking"
-        messages = [r.getMessage() for r in log_records]
-        combined = " ".join(messages).lower()
-        assert "availab" in combined, "Log must reference the availability component"
-        assert (
-            "fail" in combined or "error" in combined
-        ), "Log must record a failure outcome"
+        # AND: At least one application log record was emitted.
+        assert formatted_lines, "Expected at least one log line from cqrs_booking"
 
-        # AND: Logs exclude client identifiers and booking details.
-        for record in log_records:
-            msg = record.getMessage()
-            assert "2027-06-11" not in msg, "Log must not contain arrival date"
-            assert "2027-06-14" not in msg, "Log must not contain departure date"
+        # AND: Every formatted log line has a timestamp, the component name,
+        #      and a failure-level keyword — matching the runtime format.
+        failure_line_found = False
+        for line in formatted_lines:
+            assert timestamp_re.match(line), f"Log line missing timestamp: {line!r}"
+            assert "cqrs_booking" in line, f"Log line missing component name: {line!r}"
+            if "availability search failure" in line:
+                failure_line_found = True
+                assert (
+                    "ERROR" in line
+                ), f"Failure log line must carry ERROR level: {line!r}"
+
+        assert failure_line_found, "No log line contained 'availability search failure'"
+
+        # AND: No log line contains exception internals or query parameters.
+        all_output = "\n".join(formatted_lines)
+        assert "Traceback" not in all_output
+        assert "ProgrammingError" not in all_output
+        assert "sqlite3" not in all_output
+        assert "Cannot operate" not in all_output
+        assert "2027-06-11" not in all_output, "Arrival date must not appear in logs"
+        assert "2027-06-14" not in all_output, "Departure date must not appear in logs"
+
     finally:
         logger.removeHandler(handler)
+        logger.setLevel(original_level)
+
+
+@pytest.mark.skipif(_SKIP_DOCKER, reason=_DOCKER_SKIP_REASON)
+def test_availability_infra_001_3_s1_container_logs_no_query_params_on_failure():
+    """AVAILABILITY-INFRA-001.3-S1: Container logs exclude query params on failure."""
+    # The Flask test client does not exercise Werkzeug access logging.
+    # This test verifies the actual container log via docker logs.
+
+    # GIVEN: A running application container whose database will fail on read.
+    #        We use a path that sqlite3 will open (creating the file) but whose
+    #        schema is absent, so the first query raises OperationalError.
+    volume = f"{_VOLUME_PREFIX}-diag-{uuid.uuid4().hex[:8]}"
+    base_url = f"http://localhost:{_APP_PORT}"
+    container_id = None
+    try:
+        _remove_volume(volume)
+        # Start with a valid DB first so the app starts cleanly, then trigger
+        # failure by pointing at a DB with no schema via a sidecar rename.
+        # Simpler: start the app, then immediately break the DB file by
+        # replacing it with an empty non-SQLite file via a sidecar container.
+        container_id = _start_app_container(volume, _APP_PORT)
+        _wait_for_http(base_url + "/availability")
+
+        # Replace the DB on the volume with a corrupt file so the next read fails.
+        subprocess.run(  # nosec B603 B607
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{volume}:/data",
+                _IMAGE,
+                "python",
+                "-c",
+                "open('/data/test.db','wb').write(b'not a sqlite file')",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        # WHEN: A search is submitted with query parameters after the DB is broken.
+        import requests
+
+        requests.get(
+            base_url + "/availability",
+            params={"arrival": "2027-06-11", "departure": "2027-06-14"},
+            timeout=5,
+        )
+
+        # Collect the container log.
+        log_result = subprocess.run(  # nosec B603 B607
+            ["docker", "logs", container_id],
+            capture_output=True,
+            text=True,
+        )
+        container_log = log_result.stdout + log_result.stderr
+
+        # THEN: The application failure line is present in the log.
+        assert (
+            "availability search failure" in container_log
+        ), "Expected application failure log entry in container log"
+
+        # AND: The failure line contains timestamp, component, level, message.
+        import re
+
+        ts_re = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d+")
+        failure_line = next(
+            (
+                line
+                for line in container_log.splitlines()
+                if "availability search failure" in line
+            ),
+            None,
+        )
+        assert failure_line is not None
+        assert ts_re.search(
+            failure_line
+        ), f"Failure line missing timestamp: {failure_line!r}"
+        assert (
+            "cqrs_booking.app" in failure_line
+        ), f"Failure line missing component: {failure_line!r}"
+        assert (
+            "ERROR" in failure_line
+        ), f"Failure line missing ERROR level: {failure_line!r}"
+
+        # AND: No traceback or database exception details appear in the log.
+        assert "Traceback" not in container_log
+        assert "ProgrammingError" not in container_log
+        assert "OperationalError" not in container_log
+        assert "sqlite3" not in container_log
+
+        # AND: The query parameters do not appear in any log line.
+        for line in container_log.splitlines():
+            assert (
+                "2027-06-11" not in line
+            ), f"Arrival date leaked into container log line: {line!r}"
+            assert (
+                "2027-06-14" not in line
+            ), f"Departure date leaked into container log line: {line!r}"
+
+    finally:
+        if container_id:
+            _stop_container(container_id)
+        _remove_volume(volume)

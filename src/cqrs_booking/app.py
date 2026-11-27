@@ -112,6 +112,10 @@ def create_app_from_env() -> Flask:
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
+    # Suppress Werkzeug access log entries (INFO level) so request query
+    # parameters are not written to the log.  Werkzeug WARNING/ERROR entries
+    # (e.g. connection errors) still propagate.
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.executescript(_SCHEMA)
     conn.commit()
