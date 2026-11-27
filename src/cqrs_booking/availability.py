@@ -4,6 +4,18 @@ import sqlite3
 from datetime import date
 
 
+class ValidationError(Exception):
+    """Raised when input validation fails.
+
+    Carries a field name and an HTML-suitable message.
+    """
+
+    def __init__(self, field: str, message: str):
+        super().__init__(message)
+        self.field = field
+        self.message = message
+
+
 class ReadRegistry:
     """Read the availability projection without modifying it."""
 
@@ -36,4 +48,6 @@ class QueryService:
         self.registry = registry
 
     def find_available_rooms(self, arrival: date, departure: date) -> list[str]:
+        if arrival is None:
+            raise ValidationError("arrival", "Arrival date is required.")
         return self.registry.find_available_rooms(arrival, departure)

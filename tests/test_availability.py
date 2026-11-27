@@ -3,6 +3,8 @@
 import sqlite3
 from datetime import date
 
+import pytest
+
 
 def test_availability_be_001_1_s1_given_reserved_a_when_search_then_only_b():
     """AVAILABILITY-BE-001.1-S1: Query the read projection."""
@@ -39,5 +41,27 @@ def test_availability_be_001_1_s1_given_reserved_a_when_search_then_only_b():
         assert set(available_rooms) == {"B"}
         assert tuple(connection.iterdump()) == data_before
         assert connection.total_changes == changes_before
+    finally:
+        connection.close()
+
+
+def test_availability_be_001_1_s2_missing_date_rejected_before_query():
+    """AVAILABILITY-BE-001.1-S2: Missing date rejected before registry query."""
+    from cqrs_booking.availability import QueryService, ReadRegistry, ValidationError
+
+    connection = sqlite3.connect(":memory:")
+    try:
+        # GIVEN: The query operation is available.
+        registry = ReadRegistry(connection)
+        service = QueryService(registry)
+
+        # WHEN: A request arrives with a missing arrival date (None).
+        with pytest.raises(ValidationError) as exc_info:
+            service.find_available_rooms(None, date(2027, 6, 14))
+
+        # THEN: Validation rejects the request; error carries an HTML-suitable message.
+        error = exc_info.value
+        assert error.field == "arrival"
+        assert error.message  # non-empty human-readable message
     finally:
         connection.close()
