@@ -118,3 +118,45 @@ def test_availability_story_001_s2_no_rooms_available_message(db):
         == availability_before
     )
     assert db.total_changes == changes_before
+
+
+# ---------------------------------------------------------------------------
+# AVAILABILITY-STORY-001-S3
+# ---------------------------------------------------------------------------
+
+
+def test_availability_story_001_s3_room_available_starting_on_departure_date(db):
+    """AVAILABILITY-STORY-001-S3: Room available when arrival equals prior departure."""
+    # GIVEN: Room A is reserved 2027-06-10 to 2027-06-15; no other reservations.
+    db.executescript(
+        """
+        INSERT INTO rooms (name) VALUES ('A');
+        INSERT INTO availability (room_name, arrival, departure)
+        VALUES ('A', '2027-06-10', '2027-06-15');
+        """
+    )
+    client = _make_client(db)
+
+    rooms_before = db.execute("SELECT * FROM rooms ORDER BY name").fetchall()
+    availability_before = db.execute(
+        "SELECT * FROM availability ORDER BY room_name, arrival"
+    ).fetchall()
+    changes_before = db.total_changes
+
+    # WHEN: User searches from 2027-06-15 to 2027-06-18.
+    response = client.get(
+        "/availability",
+        query_string={"arrival": "2027-06-15", "departure": "2027-06-18"},
+    )
+
+    # THEN: Room A is included in the results; no data is changed.
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert "<li>A</li>" in body
+
+    assert db.execute("SELECT * FROM rooms ORDER BY name").fetchall() == rooms_before
+    assert (
+        db.execute("SELECT * FROM availability ORDER BY room_name, arrival").fetchall()
+        == availability_before
+    )
+    assert db.total_changes == changes_before
