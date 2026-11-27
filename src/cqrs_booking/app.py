@@ -99,9 +99,11 @@ def create_app(query_service: QueryService) -> Flask:
 def create_app_from_env() -> Flask:
     """Create the application wired to the SQLite database at DATABASE_PATH.
 
-    The schema is created if the database file is new.  Configuration is
-    read from the ``DATABASE_PATH`` environment variable (default:
-    ``booking.db``).
+    The schema is created on startup using ``CREATE TABLE IF NOT EXISTS``,
+    so existing rooms and reservations on a mounted volume are preserved
+    when the container is replaced (AVAILABILITY-INFRA-001.2-S1).
+    Configuration is read from the ``DATABASE_PATH`` environment variable
+    (default: ``booking.db``).
     """
     db_path = os.environ.get("DATABASE_PATH", "booking.db")
     logging.basicConfig(
