@@ -156,3 +156,22 @@ def test_availability_be_001_1_s2_malformed_departure_empty_string_rejected():
     assert error.field == "departure"
     assert error.message
     registry.find_available_rooms.assert_not_called()
+
+
+def test_availability_be_001_1_s2_malformed_arrival_invalid_text_rejected():
+    """AVAILABILITY-BE-001.1-S2: Unparseable arrival text rejected before query."""
+    from cqrs_booking.availability import QueryService, ValidationError
+
+    # GIVEN: The query operation is available; registry is a spy.
+    registry = MagicMock()
+    service = QueryService(registry)
+
+    # WHEN: Arrival is an unparseable string.
+    with pytest.raises(ValidationError) as exc_info:
+        service.find_available_rooms("not-a-date", date(2027, 6, 14))
+
+    # THEN: ValidationError names the arrival field; registry is not called.
+    error = exc_info.value
+    assert error.field == "arrival"
+    assert error.message
+    registry.find_available_rooms.assert_not_called()
