@@ -118,3 +118,22 @@ def test_availability_be_001_1_s2_arrival_after_departure_rejected():
     error = exc_info.value
     assert error.message
     registry.find_available_rooms.assert_not_called()
+
+
+def test_availability_be_001_1_s2_malformed_arrival_empty_string_rejected():
+    """AVAILABILITY-BE-001.1-S2: Empty string arrival rejected before registry query."""
+    from cqrs_booking.availability import QueryService, ValidationError
+
+    # GIVEN: The query operation is available; registry is a spy.
+    registry = MagicMock()
+    service = QueryService(registry)
+
+    # WHEN: Arrival is an empty string.
+    with pytest.raises(ValidationError) as exc_info:
+        service.find_available_rooms("", date(2027, 6, 14))
+
+    # THEN: ValidationError names the arrival field; registry is not called.
+    error = exc_info.value
+    assert error.field == "arrival"
+    assert error.message
+    registry.find_available_rooms.assert_not_called()

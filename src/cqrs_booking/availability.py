@@ -16,6 +16,28 @@ class ValidationError(Exception):
         self.message = message
 
 
+def _parse_date(value, field: str) -> date:
+    """Return *value* as a date, or raise ValidationError.
+
+    Accepts an existing ``date`` object unchanged.  Rejects None, empty
+    strings, text that cannot be parsed as ISO-8601, and impossible
+    calendar dates.
+    """
+    if value is None:
+        raise ValidationError(field, f"{field.capitalize()} date is required.")
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        raise ValidationError(field, f"{field.capitalize()} date is required.")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValidationError(
+            field,
+            f"{field.capitalize()} must be a valid date (YYYY-MM-DD).",
+        ) from exc
+
+
 class ReadRegistry:
     """Read the availability projection without modifying it."""
 
@@ -47,11 +69,9 @@ class QueryService:
     def __init__(self, registry: ReadRegistry):
         self.registry = registry
 
-    def find_available_rooms(self, arrival: date, departure: date) -> list[str]:
-        if arrival is None:
-            raise ValidationError("arrival", "Arrival date is required.")
-        if departure is None:
-            raise ValidationError("departure", "Departure date is required.")
+    def find_available_rooms(self, arrival, departure) -> list[str]:
+        arrival = _parse_date(arrival, "arrival")
+        departure = _parse_date(departure, "departure")
         if arrival >= departure:
             raise ValidationError(
                 "arrival",
