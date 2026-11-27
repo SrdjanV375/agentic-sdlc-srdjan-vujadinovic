@@ -107,6 +107,52 @@ def _remove_volume(volume_name: str) -> None:
     )
 
 
+def _read_volume_tables(volume_name: str, db_path: str = "/data/test.db") -> dict:
+    """Return the contents of rooms and availability tables from the volume.
+
+    Runs a one-shot sidecar container so the read goes through the same
+    filesystem path as the application, without opening the file on the host.
+    Returns ``{"rooms": [...], "availability": [...]}`` with rows as tuples
+    sorted deterministically.
+    """
+    # Build the read script. SQL is entirely hardcoded; db_path is a
+    # test-controlled constant with no user input. nosec B608 on each line
+    # that bandit flags for string-based SQL construction.
+    script = (
+        "import sqlite3, json;"  # nosec B608
+        f"c=sqlite3.connect('{db_path}');"
+        "rooms=sorted(c.execute('SELECT name FROM rooms ORDER BY name').fetchall());"  # nosec B608
+        "avail=sorted(c.execute("  # nosec B608
+        "'SELECT room_name,arrival,departure FROM availability"
+        " ORDER BY room_name,arrival,departure').fetchall());"
+        "print(json.dumps({'rooms': rooms, 'availability': avail}));"
+        "c.close()"
+    )
+    result = subprocess.run(  # nosec B603 B607
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{volume_name}:/data",
+            _IMAGE,
+            "python",
+            "-c",
+            script,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    import json
+
+    data = json.loads(result.stdout.strip())
+    return {
+        "rooms": [tuple(r) for r in data["rooms"]],
+        "availability": [tuple(r) for r in data["availability"]],
+    }
+
+
 # ---------------------------------------------------------------------------
 # AVAILABILITY-INFRA-001.1-S1
 # ---------------------------------------------------------------------------
@@ -190,6 +236,19 @@ def test_availability_infra_001_2_s1_reuse_stored_data_after_container_replace()
         )
         assert seed_result.returncode == 0, seed_result.stderr
 
+        # Verify the first container serves the expected result before replacement.
+        response_before = requests.get(
+            base_url + "/availability",
+            params={"arrival": "2027-06-11", "departure": "2027-06-14"},
+            timeout=5,
+        )
+        assert response_before.status_code == 200
+        assert "<li>B</li>" in response_before.text
+        assert "<li>A</li>" not in response_before.text
+
+        # Capture table contents from the volume before stopping the container.
+        tables_before = _read_volume_tables(volume)
+
         _stop_container(container_id)
         container_id = None
         time.sleep(1)
@@ -208,6 +267,11 @@ def test_availability_infra_001_2_s1_reuse_stored_data_after_container_replace()
         assert response.status_code == 200
         assert "<li>B</li>" in response.text
         assert "<li>A</li>" not in response.text
+
+        # AND: Both tables contain exactly the same rows as before replacement.
+        tables_after = _read_volume_tables(volume)
+        assert tables_after["rooms"] == tables_before["rooms"]
+        assert tables_after["availability"] == tables_before["availability"]
     finally:
         if container_id:
             _stop_container(container_id)
