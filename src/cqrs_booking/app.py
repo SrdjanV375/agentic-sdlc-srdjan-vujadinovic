@@ -1,8 +1,23 @@
 """Flask application factory for CQRS Booking."""
 
+import logging
+import os
+import sqlite3
+
 from flask import Flask, render_template_string, request
 
-from cqrs_booking.availability import QueryService, ValidationError
+from cqrs_booking.availability import QueryService, ReadRegistry, ValidationError
+
+_logger = logging.getLogger(__name__)
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS rooms (name TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS availability (
+    room_name TEXT NOT NULL,
+    arrival   TEXT NOT NULL,
+    departure TEXT NOT NULL
+);
+"""
 
 _AVAILABILITY_TEMPLATE = """\
 <!doctype html>
@@ -63,6 +78,12 @@ def create_app(query_service: QueryService) -> Flask:
                 rooms = query_service.find_available_rooms(arrival, departure)
             except ValidationError as exc:
                 error = exc.message
+            except Exception:
+                _logger.error(
+                    "availability search failure",
+                    exc_info=False,
+                )
+                error = "Unable to complete the request; please try again."
 
         return render_template_string(
             _AVAILABILITY_TEMPLATE,
@@ -73,3 +94,23 @@ def create_app(query_service: QueryService) -> Flask:
         )
 
     return app
+
+
+def create_app_from_env() -> Flask:
+    """Create the application wired to the SQLite database at DATABASE_PATH.
+
+    The schema is created if the database file is new.  Configuration is
+    read from the ``DATABASE_PATH`` environment variable (default:
+    ``booking.db``).
+    """
+    db_path = os.environ.get("DATABASE_PATH", "booking.db")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.executescript(_SCHEMA)
+    conn.commit()
+    registry = ReadRegistry(conn)
+    service = QueryService(registry)
+    return create_app(query_service=service)
