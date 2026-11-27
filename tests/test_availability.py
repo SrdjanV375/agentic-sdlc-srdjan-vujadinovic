@@ -213,3 +213,24 @@ def test_availability_be_001_1_s2_impossible_departure_date_rejected():
     assert error.field == "departure"
     assert error.message
     registry.find_available_rooms.assert_not_called()
+
+
+def test_availability_be_001_1_s2_string_dates_parsed_and_registry_called_once():
+    """AVAILABILITY-BE-001.1-S2: Valid string dates are parsed and forwarded."""
+    from cqrs_booking.availability import QueryService
+
+    # GIVEN: A registry mock that returns ["B"].
+    registry = MagicMock()
+    registry.find_available_rooms.return_value = ["B"]
+    service = QueryService(registry)
+
+    # WHEN: QueryService receives valid ISO-8601 strings for arrival and departure.
+    result = service.find_available_rooms("2027-06-11", "2027-06-14")
+
+    # THEN: The result is ["B"] and the registry was called exactly once
+    # with the parsed date objects, not the original strings.
+    assert result == ["B"]
+    registry.find_available_rooms.assert_called_once_with(
+        date(2027, 6, 11),
+        date(2027, 6, 14),
+    )
