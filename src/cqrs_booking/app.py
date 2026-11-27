@@ -79,6 +79,8 @@ def create_app(query_service: QueryService) -> Flask:
             except ValidationError as exc:
                 error = exc.message
             except Exception:
+                # Log component + outcome only; no dates, no SQL internals
+                # (AVAILABILITY-INFRA-001.3-S1).
                 _logger.error(
                     "availability search failure",
                     exc_info=False,
