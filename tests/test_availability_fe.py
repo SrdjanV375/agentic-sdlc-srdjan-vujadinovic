@@ -44,3 +44,30 @@ def test_availability_fe_001_1_s1_valid_search_displays_room():
         date(2027, 6, 11),
         date(2027, 6, 14),
     )
+
+
+def test_availability_fe_001_1_s2_invalid_dates_show_error_no_results():
+    """AVAILABILITY-FE-001.1-S2: Arrival after departure shows error, no results."""
+    from cqrs_booking.app import create_app
+    from cqrs_booking.availability import QueryService
+
+    # GIVEN: The search form is displayed; registry is a spy.
+    registry = MagicMock()
+    service = QueryService(registry)
+    app = create_app(query_service=service)
+    client = app.test_client()
+
+    # WHEN: The user submits arrival 2027-06-14 and departure 2027-06-11
+    # (arrival is after departure).
+    response = client.get(
+        "/availability",
+        query_string={"arrival": "2027-06-14", "departure": "2027-06-11"},
+    )
+
+    # THEN: HTTP 200 is returned; the page explains arrival must be before
+    # departure; no room results are displayed; the registry was not called.
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert "Arrival must be before departure" in body
+    assert "<li>" not in body
+    registry.find_available_rooms.assert_not_called()
