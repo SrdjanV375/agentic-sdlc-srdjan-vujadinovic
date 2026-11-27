@@ -175,3 +175,22 @@ def test_availability_be_001_1_s2_malformed_arrival_invalid_text_rejected():
     assert error.field == "arrival"
     assert error.message
     registry.find_available_rooms.assert_not_called()
+
+
+def test_availability_be_001_1_s2_impossible_arrival_date_rejected():
+    """AVAILABILITY-BE-001.1-S2: Impossible calendar arrival date rejected."""
+    from cqrs_booking.availability import QueryService, ValidationError
+
+    # GIVEN: The query operation is available; registry is a spy.
+    registry = MagicMock()
+    service = QueryService(registry)
+
+    # WHEN: Arrival is an impossible calendar date (February 30 does not exist).
+    with pytest.raises(ValidationError) as exc_info:
+        service.find_available_rooms("2027-02-30", date(2027, 6, 14))
+
+    # THEN: ValidationError names the arrival field; registry is not called.
+    error = exc_info.value
+    assert error.field == "arrival"
+    assert error.message
+    registry.find_available_rooms.assert_not_called()
