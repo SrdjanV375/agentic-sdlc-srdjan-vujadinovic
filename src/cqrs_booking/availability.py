@@ -50,4 +50,6 @@ class QueryService:
     def find_available_rooms(self, arrival: date, departure: date) -> list[str]:
         if arrival is None:
             raise ValidationError("arrival", "Arrival date is required.")
+        if departure is None:
+            raise ValidationError("departure", "Departure date is required.")
         return self.registry.find_available_rooms(arrival, departure)
