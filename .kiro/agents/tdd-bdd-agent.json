@@ -1,0 +1,45 @@
+{
+  "name": "tdd-bdd-agent",
+  "description": "TDD/BDD agent — implements kata features using strict RED-GREEN-REFACTOR discipline, one test at a time",
+  "prompt": "file://./tdd-bdd-prompt.md",
+  "tools": [
+    "read",
+    "shell",
+    "write"
+  ],
+  "allowedTools": [
+    "read"
+  ],
+  "resources": [
+    "file://docs/user-stories/**/*.md"
+  ],
+  "hooks": [
+    {
+      "name": "postToolUse-0",
+      "trigger": "PostToolUse",
+      "matcher": "write",
+      "action": {
+        "type": "command",
+        "command": "log=/tmp/cqrs-booking-tdd-hook.log; date -Is > \"$log\"; docker run --rm -v \"$(pwd):/app\" -w /app kata-tests pytest tests/ -v --tb=short >> \"$log\" 2>&1; result=$?; printf \"\\nExit code: %s\\n\" \"$result\" >> \"$log\"; cat \"$log\"; exit \"$result\""
+      },
+      "timeout": 60
+    }
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_read",
+        "effect": "allow"
+      },
+      {
+        "capability": "skill",
+        "effect": "allow"
+      }
+    ]
+  },
+  "kiroUpgrade": {
+    "revision": 3,
+    "fingerprint": "sha256:69c03ccb3214f6454159c21dcb639879deb76da3069b3b75268afa094379e5a2",
+    "source": "sha256:2739466f609ceedb151bae86e7e8e31b9296655e16c815c245530a2d0693402d"
+  }
+}

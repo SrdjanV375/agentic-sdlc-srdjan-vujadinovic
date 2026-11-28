@@ -39,7 +39,7 @@ This 100% core ratio departs from the course's approximate 20% target because th
 ## Progress
 
 - Core story bundles reviewed and approved: 2/2
-- Core stories implemented and verified: 0/2
+- Core stories implemented and verified: 1/2
 - Requirements approval does not imply implementation completion.
 
 ### Bundle Documentation Status
@@ -53,7 +53,7 @@ This 100% core ratio departs from the course's approximate 20% target because th
 
 | Story ID | Domain | INFRA | BE | FE | E2E |
 |----------|--------|-------|----|----|-----|
-| AVAILABILITY-STORY-001 | AVAILABILITY | Not started | Not started | Not started | Not started |
+| AVAILABILITY-STORY-001 | AVAILABILITY | Implemented and verified | Implemented and verified | Implemented and verified | Implemented and verified |
 | BOOKING-STORY-001 | BOOKING | Not started | Not started | Not started | Not started |
 
 Implementation order: INFRA → BE → FE → original-story E2E verification.

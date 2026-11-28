@@ -216,6 +216,90 @@ Architecture: [Chapter 8 — Logging](../../architecture/08-cross-cutting-concep
 * Logs exclude client identifiers and booking details.
 * The user receives generic failure feedback without database internals.
 
+## AVAILABILITY-INFRA-001.4 — Docker test environment
+
+Parent: AVAILABILITY-STORY-001.
+
+AS A developer
+I WANT a Docker image that builds successfully and runs pytest
+SO THAT I can verify the project's test suite consistently in CI.
+
+Architecture: [Chapter 7 — Planned Deployment](../../architecture/07-deployment-view.md#planned-deployment-architecture),
+[Dockerfile](../../Dockerfile),
+[requirements.txt](../../requirements.txt),
+[AVAILABILITY-INFRA-001.1](./availability.md).
+
+**Verification commands** run from the repository root:
+```bash
+docker build -t kata-tests .
+docker run --rm kata-tests
+```
+
+### SCENARIO 1: Docker image builds successfully
+
+**Scenario ID**: AVAILABILITY-INFRA-001.4-S1
+
+**GIVEN**
+* The Dockerfile and requirements.txt are present in the repository root.
+
+**WHEN**
+* The image is built with `docker build -t kata-tests .`.
+
+**THEN**
+* The image build exits with code 0.
+* The `kata-tests` image exists after the build completes.
+
+### SCENARIO 2: Requirements dependencies are installed
+
+**Scenario ID**: AVAILABILITY-INFRA-001.4-S2
+
+**GIVEN**
+* The `kata-tests` image has been built.
+
+**WHEN**
+* The installed dependencies are verified with:
+  ```bash
+  docker run --rm kata-tests python -m pip check
+  docker run --rm kata-tests python -c "import flask, pytest"
+  ```
+
+**THEN**
+* `python -m pip check` exits with code 0 (no conflicts).
+* `python -c "import flask, pytest"` exits with code 0.
+* Installed versions satisfy requirements.txt constraints.
+
+### SCENARIO 3: pytest discovers project tests
+
+**Scenario ID**: AVAILABILITY-INFRA-001.4-S3
+
+**GIVEN**
+* The `kata-tests` image contains the project source and tests directory.
+
+**WHEN**
+* Test discovery is verified with:
+  ```bash
+  docker run --rm kata-tests pytest tests/ --collect-only -q
+  ```
+
+**THEN**
+* pytest reports collecting at least one test.
+* The command exits with code 0.
+* No errors appear in the discovery output.
+
+### SCENARIO 4: Tests run successfully inside Docker
+
+**Scenario ID**: AVAILABILITY-INFRA-001.4-S4
+
+**GIVEN**
+* The `kata-tests` image contains the project source and tests directory.
+
+**WHEN**
+* Tests are executed with `docker run --rm kata-tests`.
+
+**THEN**
+* All collected tests pass.
+* The container exits with code 0.
+
 ## Infrastructure Applicability and Dependencies
 
 - Deployment and persistent storage support both search and booking;
@@ -224,6 +308,7 @@ Architecture: [Chapter 8 — Logging](../../architecture/08-cross-cutting-concep
 - Search is read-only and publishes no events.
 - No event broker is required. Synchronous projection notification belongs
   to the booking bundle, following Chapters 5 and 6.
+- The Docker test environment (AVAILABILITY-INFRA-001.4) supports verification of both availability and booking functionality; it does not depend on implementing the application runtime story AVAILABILITY-INFRA-001.1.
 - Implementation order: INFRA → BE → FE → original-story E2E verification.
 
 ## Date-Boundary Rule
@@ -244,3 +329,7 @@ Arrival is inclusive, departure is exclusive. Arrival must be before departure. 
 | AVAILABILITY-INFRA-001.1-S1 | AVAILABILITY-INFRA-001.1 | [Chapter 7](../../architecture/07-deployment-view.md#planned-deployment-architecture) |
 | AVAILABILITY-INFRA-001.2-S1 | AVAILABILITY-INFRA-001.2 | [Chapter 7](../../architecture/07-deployment-view.md#docker-host), [Chapter 8](../../architecture/08-cross-cutting-concepts.md#configuration) |
 | AVAILABILITY-INFRA-001.3-S1 | AVAILABILITY-INFRA-001.3 | [Chapter 8](../../architecture/08-cross-cutting-concepts.md#logging), [Chapter 8](../../architecture/08-cross-cutting-concepts.md#error-handling) |
+| AVAILABILITY-INFRA-001.4-S1 | AVAILABILITY-INFRA-001.4 | [Chapter 7](../../architecture/07-deployment-view.md#planned-deployment-architecture), [Dockerfile](../../Dockerfile) |
+| AVAILABILITY-INFRA-001.4-S2 | AVAILABILITY-INFRA-001.4 | [Chapter 7](../../architecture/07-deployment-view.md#planned-deployment-architecture), [requirements.txt](../../requirements.txt) |
+| AVAILABILITY-INFRA-001.4-S3 | AVAILABILITY-INFRA-001.4 | [Chapter 7](../../architecture/07-deployment-view.md#planned-deployment-architecture), [Dockerfile](../../Dockerfile) |
+| AVAILABILITY-INFRA-001.4-S4 | AVAILABILITY-INFRA-001.4 | [Chapter 7](../../architecture/07-deployment-view.md#planned-deployment-architecture), [Dockerfile](../../Dockerfile) |
